@@ -20,6 +20,7 @@ class Player:
         # 仅在一局开始时需要更新的变量
         self.identify = "SMALLBLIND"
         self.hand_cards = np.empty((0, 2))
+        self.hand_cards_raw = ''
         # 每做出一次动作就需要更新的变量
         self.operation = np.zeros((1, 2), dtype="int")  # 记录玩家单局内的所有行为
         self.all_operation = np.zeros((1, 2), dtype="int")  # 记录玩家整个对弈过程中的所有行为
@@ -36,7 +37,7 @@ class Player:
         # 跟策略有关的变量
         # self.hands_win_rate = 0  # 预估的当前手牌胜率
 
-    def init_identity(self, identity, hand_cards=None):
+    def init_identity(self, identity, hand_cards=None, hands_cards_raw=None):
         self.operation = np.zeros((1, 2), dtype="int")
         if identity == "SMALLBLIND":
             self.identify = constants.SMALLBLIND
@@ -54,6 +55,7 @@ class Player:
             self.game_chip = 50
         if hand_cards is not None:
             self.hand_cards = hand_cards
+            self.hand_cards_raw = hands_cards_raw
             # 手牌胜率预测，一种方法是采用蒙特卡洛模拟，另一种是查表，此处为蒙特卡洛模拟
             # self.hands_win_rate = evaluate_hands_win_rate(hand_cards, 2000)  # 手牌胜率预测
 
@@ -136,56 +138,56 @@ class Game:
         self.public_cards = np.empty((0, 2))  # 公共牌 [花色，点数]
         self.last_reply = None  # 服务端最后一次发来的指令
 
-    def parse_server_cmd(self, reply: str):
-        """
-        解析服务端发来的所有指令
-
-        :return: 值为301表示我方需要行动，值为302表示不需要行动
-        """
-        # catzzz_action_flag = 0  # 我方是否需要采取行动的标志
-        self.last_reply = reply
-        if "flop" in reply or "turn" in reply or "river" in reply:  # 阶段类指令
-            self.parse_stage_cmd(reply)
-            if (self.stage == constants.preflop_stage and self.catzzz.identify == constants.SMALLBLIND) \
-                    or (self.stage == constants.flop_stage and self.catzzz.identify == constants.BIGBLIND) \
-                    or (self.stage == constants.turn_stage and self.catzzz.identify == constants.BIGBLIND) \
-                    or (self.stage == constants.river_stage and self.catzzz.identify == constants.BIGBLIND):
-                catzzz_action_flag = constants.take_action  # 需要采取行动
-            else:
-                catzzz_action_flag = constants.no_take_action
-        elif "earnChips" in reply:  # earnChips指令
-            reply_split = reply.split(" ")
-            earn_chip = int(reply_split[1])
-            # allin行为不需要river_stage阶段，直接比牌
-            if self.stage == constants.river_stage \
-                    and self.catzzz.stage_chip == self.opponent.stage_chip:
-                catzzz_action_flag = constants.no_take_action
-            else:
-                catzzz_action_flag = constants.game_over
-            self.stage = constants.earn_chip_stage
-            self.catzzz.total_earn_chip += earn_chip
-            self.opponent.total_earn_chip -= earn_chip
-            # catzzz_action_flag = constants.game_over
-        elif "oppo_hands" in reply:  # oppo_hands指令
-            # todo 接收并更新对手手牌
-            self.stage = constants.show_oppo_card
-            catzzz_action_flag = constants.game_over
-        else:  # 对手行为类指令
-            oppo_action = self.parse_client_cmd(reply, self.opponent, self.catzzz)
-            # 下面的代码主要是用于判断我方是否需要做出行动
-            print("oppo_action", oppo_action)
-            if oppo_action == constants.player_fold_action:
-                catzzz_action_flag = constants.no_take_action
-            elif oppo_action == constants.player_call_action:
-                # 小盲注在preflop阶段跟注时，大盲注仍可以下注，其他阶段跟注，对方在本阶段都不能再下注
-                if self.stage == constants.preflop_stage and self.catzzz.identify == "BIGBLIND":
-                    catzzz_action_flag = constants.take_action
-                else:
-                    catzzz_action_flag = constants.no_take_action
-            else:
-                catzzz_action_flag = constants.take_action
-        self.last_reply = reply
-        return catzzz_action_flag
+    # def parse_server_cmd(self, reply: str):
+    #     """
+    #     解析服务端发来的所有指令
+    #
+    #     :return: 值为301表示我方需要行动，值为302表示不需要行动
+    #     """
+    #     # catzzz_action_flag = 0  # 我方是否需要采取行动的标志
+    #     self.last_reply = reply
+    #     if "flop" in reply or "turn" in reply or "river" in reply:  # 阶段类指令
+    #         self.parse_stage_cmd(reply)
+    #         if (self.stage == constants.preflop_stage and self.catzzz.identify == constants.SMALLBLIND) \
+    #                 or (self.stage == constants.flop_stage and self.catzzz.identify == constants.BIGBLIND) \
+    #                 or (self.stage == constants.turn_stage and self.catzzz.identify == constants.BIGBLIND) \
+    #                 or (self.stage == constants.river_stage and self.catzzz.identify == constants.BIGBLIND):
+    #             catzzz_action_flag = constants.take_action  # 需要采取行动
+    #         else:
+    #             catzzz_action_flag = constants.no_take_action
+    #     elif "earnChips" in reply:  # earnChips指令
+    #         reply_split = reply.split(" ")
+    #         earn_chip = int(reply_split[1])
+    #         # allin行为不需要river_stage阶段，直接比牌
+    #         if self.stage == constants.river_stage \
+    #                 and self.catzzz.stage_chip == self.opponent.stage_chip:
+    #             catzzz_action_flag = constants.no_take_action
+    #         else:
+    #             catzzz_action_flag = constants.game_over
+    #         self.stage = constants.earn_chip_stage
+    #         self.catzzz.total_earn_chip += earn_chip
+    #         self.opponent.total_earn_chip -= earn_chip
+    #         # catzzz_action_flag = constants.game_over
+    #     elif "oppo_hands" in reply:  # oppo_hands指令
+    #         # todo 接收并更新对手手牌
+    #         self.stage = constants.show_oppo_card
+    #         catzzz_action_flag = constants.game_over
+    #     else:  # 对手行为类指令
+    #         oppo_action = self.parse_client_cmd(reply, self.opponent, self.catzzz)
+    #         # 下面的代码主要是用于判断我方是否需要做出行动
+    #         print("oppo_action", oppo_action)
+    #         if oppo_action == constants.player_fold_action:
+    #             catzzz_action_flag = constants.no_take_action
+    #         elif oppo_action == constants.player_call_action:
+    #             # 小盲注在preflop阶段跟注时，大盲注仍可以下注，其他阶段跟注，对方在本阶段都不能再下注
+    #             if self.stage == constants.preflop_stage and self.catzzz.identify == "BIGBLIND":
+    #                 catzzz_action_flag = constants.take_action
+    #             else:
+    #                 catzzz_action_flag = constants.no_take_action
+    #         else:
+    #             catzzz_action_flag = constants.take_action
+    #     self.last_reply = reply
+    #     return catzzz_action_flag
 
     def parse_server_cmd_1(self, reply: str):
         """
@@ -194,6 +196,7 @@ class Game:
         :return: 游戏开始标志，我方是否需要采取行动标志
         """
         # catzzz_action_flag = 0  # 我方是否需要采取行动的标志
+        catzzz_first_action_flag = 0  # 我方是否需要在本阶段内先下注，只在刚进入某一阶段内判断
         game_flag = 0
         self.last_reply = reply
         if "flop" in reply or "turn" in reply or "river" in reply:  # 阶段类指令
@@ -203,6 +206,7 @@ class Game:
                     or (self.stage == constants.turn_stage and self.catzzz.identify == constants.BIGBLIND) \
                     or (self.stage == constants.river_stage and self.catzzz.identify == constants.BIGBLIND):
                 catzzz_action_flag = constants.take_action  # 需要采取行动
+                catzzz_first_action_flag = 1
             else:
                 catzzz_action_flag = constants.no_take_action
         elif "earnChips" in reply:  # earnChips指令
@@ -216,7 +220,7 @@ class Game:
                 earn_chip = int(reply_split[1])
             except Exception as e:
                 print("earn 错误")
-                earn_chip=100
+                earn_chip = 100
             if self.opponent.game_chip < math.fabs(earn_chip):
                 self.opponent.player_action(constants.player_call_action, self.catzzz.stage_chip)
 
@@ -227,8 +231,9 @@ class Game:
             catzzz_action_flag = constants.no_take_action
         elif "oppo_hands" in reply:  # oppo_hands指令
             self.stage = constants.show_oppo_card
-            cards = extract_cards_from_reply(reply)
+            cards, cards_raw = extract_cards_from_reply(reply)
             self.opponent.hand_cards = cards
+            self.opponent.hand_cards_raw = cards_raw
             catzzz_action_flag = constants.no_take_action
         else:  # 对手行为类指令
             oppo_action, oppo_action_chip = self.parse_client_cmd_1(reply, self.opponent, self.catzzz)
@@ -244,7 +249,7 @@ class Game:
                 catzzz_action_flag = constants.take_action
         self.last_reply = reply
         self.total_chip = self.catzzz.game_chip + self.opponent.game_chip
-        return game_flag, catzzz_action_flag
+        return game_flag, catzzz_action_flag, catzzz_first_action_flag
 
     # raise 200, call, check, fold, allin
 
@@ -253,7 +258,7 @@ class Game:
         解析服务端发来的阶段类指令（不包括earnChips和oppo_hands）并更新信息
         """
         reply_split = reply.split("|")
-        cards = extract_cards_from_reply(reply)
+        cards, cards_raw = extract_cards_from_reply(reply)
         catzzz = self.catzzz
         opponent = self.opponent
         start_game_flag = constants.game_keeping  # 为304表示开始新的一局游戏
@@ -269,7 +274,7 @@ class Game:
         if reply_split[0] == "preflop":
             # preflop指令表示开始新的一局游戏，结束上一局游戏
             self.stage = constants.preflop_stage
-            catzzz.init_identity(reply_split[1], cards)
+            catzzz.init_identity(reply_split[1], cards, cards_raw)
             start_game_flag = constants.game_start
             # 确认对手身份
             if reply_split[1] == "SMALLBLIND":
@@ -344,44 +349,44 @@ class Game:
         self.total_chip = sender.game_chip + opponent.game_chip
         return client_action, client_chip
 
-    def parse_stage_cmd(self, reply: str):
-        """
-        解析服务端发来的阶段类指令（不包括earnChips和oppo_hands）并更新信息
-        """
-        reply_split = reply.split("|")
-        cards = extract_cards_from_reply(reply)
-        catzzz = self.catzzz
-        opponent = self.opponent
-
-        # if reply_split[0] == "oppo_hands":
-        #     pass
-        # 阶段类指令
-        if reply_split[0] == "flop":
-            self.stage = constants.flop_stage
-            self.public_cards = cards  # 添加公共牌（此处可以直接用'='）
-        elif reply_split[0] == "turn":
-            self.stage = constants.turn_stage
-            self.public_cards = np.vstack((self.public_cards, cards))
-        elif reply_split[0] == "river":
-            self.stage = constants.river_stage
-            self.public_cards = np.vstack((self.public_cards, cards))
-        # preflop阶段需要确认身份，确认手牌，下大小盲注
-        if reply_split[0] == "preflop":
-            # catzzz.hand_cards = cards
-            self.stage = constants.preflop_stage
-            catzzz.init_identity(reply_split[1], cards)
-            # 确认对手身份
-            if reply_split[1] == "SMALLBLIND":
-                opponent.init_identity(constants.BIGBLIND, None)
-            else:
-                opponent.init_identity(constants.SMALLBLIND, None)
-            self.total_chip = catzzz.game_chip + opponent.game_chip
-        else:
-            # 进入其他阶段时，可能会隐藏了一次对手call行为
-            if catzzz.stage_chip > opponent.stage_chip:
-                opponent.player_action(constants.player_call_action, catzzz.stage_chip)
-            catzzz.enter_next_stage()
-            opponent.enter_next_stage()
+    # def parse_stage_cmd(self, reply: str):
+    #     """
+    #     解析服务端发来的阶段类指令（不包括earnChips和oppo_hands）并更新信息
+    #     """
+    #     reply_split = reply.split("|")
+    #     cards = extract_cards_from_reply(reply)
+    #     catzzz = self.catzzz
+    #     opponent = self.opponent
+    #
+    #     # if reply_split[0] == "oppo_hands":
+    #     #     pass
+    #     # 阶段类指令
+    #     if reply_split[0] == "flop":
+    #         self.stage = constants.flop_stage
+    #         self.public_cards = cards  # 添加公共牌（此处可以直接用'='）
+    #     elif reply_split[0] == "turn":
+    #         self.stage = constants.turn_stage
+    #         self.public_cards = np.vstack((self.public_cards, cards))
+    #     elif reply_split[0] == "river":
+    #         self.stage = constants.river_stage
+    #         self.public_cards = np.vstack((self.public_cards, cards))
+    #     # preflop阶段需要确认身份，确认手牌，下大小盲注
+    #     if reply_split[0] == "preflop":
+    #         # catzzz.hand_cards = cards
+    #         self.stage = constants.preflop_stage
+    #         catzzz.init_identity(reply_split[1], cards)
+    #         # 确认对手身份
+    #         if reply_split[1] == "SMALLBLIND":
+    #             opponent.init_identity(constants.BIGBLIND, None)
+    #         else:
+    #             opponent.init_identity(constants.SMALLBLIND, None)
+    #         self.total_chip = catzzz.game_chip + opponent.game_chip
+    #     else:
+    #         # 进入其他阶段时，可能会隐藏了一次对手call行为
+    #         if catzzz.stage_chip > opponent.stage_chip:
+    #             opponent.player_action(constants.player_call_action, catzzz.stage_chip)
+    #         catzzz.enter_next_stage()
+    #         opponent.enter_next_stage()
 
     def print_info(self):
         """

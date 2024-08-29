@@ -77,31 +77,31 @@ def extract_cards_from_reply(reply):
     # str_list的结果类似['1,2', '3,9']
     str_list = str_list[1::2]  # 步长为2
     cards = []
-    card_raw = ''
+    cards_raw = ''  # 类似3s4d
     for i in range(len(str_list)):
         line = str_list[i].split(",")
         int_list = list(map(int, line))
         cards.append(int_list)
-        card_raw += new_func1_card_encode(int_list)  # 2024-07-24新增代码
+        cards_raw += new_func1_card_encode(int_list)  # 2024-07-24新增代码
     cards = np.array(cards)
-    print(f'extract_cards_from_reply func()->原始手牌: {reply}, 解析手牌: {card_raw}')
-    return cards
+    print(f'extract_cards_from_reply func()->原始手牌: {reply}, 解析手牌: {cards_raw}')
+    return cards, cards_raw
 
 
 def new_func1_card_encode(int_list):
-    # 2024-07-24新增代码，仅用在extract_cards_from_reply函数中，将手牌编码为3d格式，只能编码一张牌
-    if int_list[1] == 10:
+    # todo 2024-07-24新增代码，仅用在extract_cards_from_reply函数中，将手牌编码为3d格式，只能编码一张牌
+    if int_list[1] == 8:
         card_raw = 'T'
-    elif int_list[1] == 11:
+    elif int_list[1] == 9:
         card_raw = 'J'
-    elif int_list[1] == 12:
+    elif int_list[1] == 10:
         card_raw = 'Q'
-    elif int_list[1] == 13:
+    elif int_list[1] == 11:
         card_raw = 'K'
-    elif int_list[1] == 14:
+    elif int_list[1] == 12:
         card_raw = 'A'
     else:
-        card_raw = str(int_list[1])
+        card_raw = str(int_list[1] + 2)
     if int_list[0] == 0:
         card_raw += 's'
     elif int_list[0] == 1:

@@ -37,13 +37,15 @@ class GUI:
         self.count = 1  # 记录服务端发来的指令数
         self.episode = 1  # 记录对局数
         self.root.title("客户端--by gql")
-        self.root.geometry("800x500+430+120")
+        self.root.geometry("600x500+430+120")
         self.client_name = None
         self.input = None
         self.server_list_msg = None
         self.client_input = None
         self.client_send_btn = None
         self.fold_btn = None
+        self.call_btn = None
+        self.check_btn = None
         self.interface()
         self.socket = connect_server(name, ip, port)
         self.display_msg('name', name)
@@ -57,7 +59,7 @@ class GUI:
         """
         self.client_name = tk.Label(self.root, text=self.name)
         self.client_name.pack()
-        self.server_list_msg = tk.Listbox(self.root, width=52, height=20)
+        self.server_list_msg = tk.Listbox(self.root, width=52, height=18)
         self.server_list_msg.pack()
         self.input = tk.StringVar()
         self.client_input = tk.Entry(self.root, width=52, textvariable=self.input)
@@ -67,6 +69,10 @@ class GUI:
         self.client_send_btn.pack()
         self.fold_btn = tk.Button(self.root, text="fold指令", command=self.send_fold_cmd_event)
         self.fold_btn.pack()
+        self.check_btn = tk.Button(self.root, text="check指令", command=self.send_check_cmd_event)
+        self.check_btn.pack()
+        self.call_btn = tk.Button(self.root, text="call指令", command=self.send_call_cmd_event)
+        self.call_btn.pack()
 
     def send_cmd_event(self, event=''):
         """
@@ -82,7 +88,17 @@ class GUI:
 
     def send_fold_cmd_event(self, event=''):
         self.socket.sendall("fold".encode("ASCII"))
-        self.display_msg('client', "fold")
+        self.display_msg('client:', "fold")
+        self.input.set('')
+
+    def send_check_cmd_event(self, event=''):
+        self.socket.sendall("check".encode("ASCII"))
+        self.display_msg('client:', "check")
+        self.input.set('')
+
+    def send_call_cmd_event(self, event=''):
+        self.socket.sendall("call".encode("ASCII"))
+        self.display_msg('client:', "call")
         self.input.set('')
 
     def start(self):
@@ -115,6 +131,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', type=str, default='Thinking in THP')
     parser.add_argument('--ip', type=str, default='127.0.0.1')
+    # parser.add_argument('--ip', type=str, default='119.45.103.129')  # 405-7261-4519，常驻骑士德州扑克 1 队
+    # parser.add_argument('--ip', type=str, default='119.45.237.113')     # 494-9758-7129，弈翔_德州扑克一队
+    # parser.add_argument('--ip', type=str, default='1.13.175.56')  # 315-7857-6471，星光德州扑克
     parser.add_argument('--port', type=int, default=10001)
     args = parser.parse_args()
     # args_dict = args.__dict__

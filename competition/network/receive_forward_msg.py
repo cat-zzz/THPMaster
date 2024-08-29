@@ -45,7 +45,7 @@ def connect_server(name, ip_port=("127.0.0.1", 10001)):
     print("---连接成功---")
     reply = s.recv(1024).decode("ASCII")
     if reply == "name":
-        print("server:", reply)
+        print("server:", reply, name)
         s.send(name.encode())
     return s
 
