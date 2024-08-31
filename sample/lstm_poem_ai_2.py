@@ -39,9 +39,9 @@ class DictObj(object):
 
 
 Config = DictObj({
-    'poem_path': "/mnt/data/tang.npz",
-    'tensorboard_path': '/mnt/data/tensorboard/',
-    'model_save_path': '/mnt/data/modelDict2/',
+    'poem_path': "./tang.npz",
+    'tensorboard_path': './tensorboard/',
+    'model_save_path': './modelDict2/',
     'embedding_dim': 128,
     'hidden_dim': 1024,
     'lr': 0.001,

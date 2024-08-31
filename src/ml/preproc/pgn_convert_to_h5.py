@@ -7,11 +7,12 @@
 """
 import logging
 import re
+import time
 
 import h5py
 import numpy as np
 
-from src.util.logger import get_logger
+from src.util.logger import get_logger, logger
 
 CARDS = ['2c', '3c', '4c', '5c', '6c', '7c', '8c', '9c', 'Tc', 'Jc', 'Qc', 'Kc', 'Ac',
          '2d', '3d', '4d', '5d', '6d', '7d', '8d', '9d', 'Td', 'Jd', 'Qd', 'Kd', 'Ad',
@@ -131,9 +132,143 @@ def specific_to_abstract_chip(specific_chip, last_chip, ratio_flag=1):
     return closest_index
 
 
+def specific_to_abstract_chip_2(specific_chip, previous_chip, ratio_flag=1, sigma=0.9):
+    if ratio_flag:
+        ratio_seq = [2, 2.25, 2.5, 2.75, 3, 3.5, 4, 5, 6]  # bet_ratio_seq，阶段内非第一次下注
+    else:
+        ratio_seq = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]  # pot_ratio_seq，阶段内第一次下注
+    if previous_chip == 0:
+        # previous_chip为上一玩家下注筹码或底池筹码
+        logger.error('分母previous_chip不能为0', exc_info=True)
+        return None
+    base_bet = previous_chip
+    bet_amounts = np.array([base_bet * multiple for multiple in ratio_seq])
+    # 计算当前下注金额与各个基准倍数的差异
+    differences = np.abs(specific_chip - bet_amounts)
+    # 使用高斯核对距离进行加权（距离越小，权重越大）
+    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
+    # 归一化处理，使得权重之和为1
+    normalized_similarities = similarities / np.sum(similarities)
+    return normalized_similarities
+
+
+def specific_to_abstract_chip_3(current_ratio, ratio_flag=1):
+    if ratio_flag:
+        ratio_seq = [2, 2.5, 3, 3.75, 4.5, 5.75, 7.5, 9]  # bet_ratio_seq，阶段内非第一次下注
+        # 动态调整sigma值
+        if current_ratio <= 3:
+            sigma = 0.15
+        elif current_ratio <= 4:  # 这里去掉了重复判断3 < current_ratio
+            sigma = 0.25
+        elif current_ratio <= 5:
+            sigma = 0.4
+        elif current_ratio <= 7:
+            sigma = 0.53
+        else:
+            sigma = 0.7
+    else:
+        ratio_seq = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]  # pot_ratio_seq，阶段内第一次下注
+        if current_ratio <= 1.5:
+            sigma = 0.1
+        elif current_ratio <= 2.75:
+            sigma = 0.2
+        else:
+            sigma = 0.3
+
+    # 计算当前下注金额与各个基准倍数的差异
+    differences = np.abs(current_ratio - np.array(ratio_seq))
+    # 使用高斯核对距离进行加权
+    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
+    # 归一化处理，使得权重之和为1
+    normalized_similarities = similarities / np.sum(similarities)
+
+    # 识别和处理小于threshold的元素
+    mask = normalized_similarities >= 0.001
+    small_elements_sum = np.sum(normalized_similarities[~mask])
+    normalized_similarities[~mask] = 0
+
+    # 将小元素的总和平均分配给剩余的元素
+    remaining_sum = np.sum(normalized_similarities)
+    if remaining_sum > 0:
+        normalized_similarities += normalized_similarities * (small_elements_sum / remaining_sum)
+
+    return normalized_similarities
+
+
+def specific_to_abstract_chip_4(current_ratio, ratio_flag=1, threshold=1e-3):
+    if ratio_flag:
+        ratio_seq = np.array([2, 2.5, 3, 3.75, 4.5, 5.75, 7.5, 9])
+        if current_ratio <= 3:
+            sigma = 0.15
+        elif current_ratio <= 4:
+            sigma = 0.25
+        elif current_ratio <= 5:
+            sigma = 0.4
+        elif current_ratio <= 7:
+            sigma = 0.53
+        else:
+            sigma = 0.7
+    else:
+        ratio_seq = np.array([0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4])
+        if current_ratio <= 1.5:
+            sigma = 0.1
+        elif current_ratio <= 2.75:
+            sigma = 0.2
+        else:
+            sigma = 0.3
+    # 计算当前下注金额与各个基准倍数的差异，并使用高斯核进行加权
+    differences = current_ratio - ratio_seq  # 后续计算会对differences进行平方，所以此处无需计算绝对值
+    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
+    normalized_similarities = similarities / np.sum(similarities)
+    # 识别和处理小于阈值的元素，并将其权重重新分配
+    mask = normalized_similarities >= threshold
+    small_elements_sum = np.sum(normalized_similarities[~mask])
+    normalized_similarities[~mask] = 0
+    remaining_sum = np.sum(normalized_similarities)  # 将小于阈值的元素的总和平均分配给剩余的元素
+    if remaining_sum > 0:
+        normalized_similarities += normalized_similarities * (small_elements_sum / remaining_sum)
+    return normalized_similarities
+
+
 if __name__ == '__main__':
-    logger = get_logger()
+    # logger = get_logger()
     # 测试specific_to_abstract_chip()函数
-    closest_index_1 = specific_to_abstract_chip(110, 100, 1)
-    print(closest_index_1)
+    # closest_index_1 = specific_to_abstract_chip(110, 100, 1)
+    # print(closest_index_1)
+    # result = specific_to_abstract_chip_2(220, 100, 10)
+    # print(result)
+    # result = specific_to_abstract_chip_2(1000, 400, 1, 40)
+    # print(result)
+    # result = specific_to_abstract_chip_3(3, 1)
+    # print(result)
+    # result = specific_to_abstract_chip_3(3, 1)
+    # print(result)
+    # result = specific_to_abstract_chip_3(3.15, 1)
+    # print(result)
+
+    # start_time = time.time()
+    # cr = 0.1
+    # incr = 0.05
+    # for i in range(1000000):
+    #     cr = round(cr, 2)
+    #     result = specific_to_abstract_chip_3(cr, 0)
+    #     result[result < 1e-3] = 0
+    #     # print('current ratio:', cr, 'result:', result)
+    #     cr += incr
+    # end_time = time.time()
+    # runtime = end_time - start_time
+    # print(f"程序运行时间为: {runtime} 秒")
+
+    start_time = time.time()
+    cr = 0.1
+    incr = 0.05
+    for i in range(1000000):
+        cr = round(cr, 2)
+        result = specific_to_abstract_chip_4(cr, 0)
+        result[result < 1e-3] = 0
+        # print('current ratio:', cr, 'result:', result)
+        cr += incr
+    end_time = time.time()
+    runtime = end_time - start_time
+    print(f"程序运行时间为: {runtime} 秒")
     pass

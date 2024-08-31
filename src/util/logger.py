@@ -47,7 +47,7 @@ class ColoredFormatter(logging.Formatter):
         formatted_record = formatted_record.replace(f'[{record.levelname}]',
                                                     f'{log_color}[{record.levelname}]{RESET_COLOR}')
         formatted_record = formatted_record.replace(f'{record.filename}:{record.lineno} {record.funcName}()',
-                                f'{log_color}{record.filename}:{record.lineno} {record.funcName}(){RESET_COLOR}')
+                                                    f'{log_color}{record.filename}:{record.lineno} {record.funcName}(){RESET_COLOR}')
         formatted_record = formatted_record
         return formatted_record
 
@@ -103,7 +103,7 @@ def get_logger(log_to_console=True, log_to_file=False, log_file_path='app.log',
 
 def test():
     # 示例用法
-    logger = get_logger(
+    logger1 = get_logger(
         log_to_console=True,
         log_to_file=False,
         log_file_path='application.log',
@@ -112,13 +112,23 @@ def test():
         backup_count=3,  # 保留3个备份
         level=logging.DEBUG
     )
-    logger.debug("This is a debug message")
-    logger.info("This is an info message")
-    logger.warning("This is a warning message")
-    logger.error("This is an error message")
-    logger.critical("This is a critical message")
+    logger1.debug("This is a debug message")
+    logger1.info("This is an info message")
+    logger1.warning("This is a warning message")
+    logger1.error("This is an error message")
+    logger1.critical("This is a critical message")
 
 
+# 全局日志器
+logger = get_logger(
+    log_to_console=True,
+    log_to_file=False,
+    log_file_path='application.log',
+    use_rotation=True,  # 设置为 True 使用大小轮转
+    max_bytes=1 * 1024 * 1024,  # 每个日志文件最大 1 MB
+    backup_count=3,  # 保留3个备份
+    level=logging.DEBUG
+)
 if __name__ == '__main__':
     test()
     pass

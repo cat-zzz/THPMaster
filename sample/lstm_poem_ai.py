@@ -5,16 +5,18 @@
 @Author : gql
 @Date   : 2024/8/27 17:11
 """
-import torch
 import os
-from torch import nn
+import shutil
+
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+import torch
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
+from torch import nn
+from torch.utils.data import Dataset, DataLoader
 # from tqdm.notebook import tqdm
 from tqdm import tqdm
-import shutil
+
+from sample.lstm_poem_ai_2 import MyPoetryModel_tanh
 
 
 class MyDict(object):
@@ -43,8 +45,8 @@ Config = MyDict({
     # 'poem_path': "/mnt/data/tang.npz",
     # 'tensorboard_path': '/mnt/data/tensorboard/',
     # 'model_save_path': '/mnt/data/modelDict/',
-    'embedding_dim': 100,
-    'hidden_dim': 512,
+    'embedding_dim': 128,
+    'hidden_dim': 1024,
     'lr': 0.001,
     'LSTM_layers': 3
 })
@@ -75,6 +77,7 @@ def view_data(poem_path):
         word_data[0, col] = ix2word[data[row, col]]
     print(data.shape)  # 结果为(57580, 125)
     print(word_data)  # 随机查看
+    print(data)
 
 
 class PoemDataset(Dataset):
@@ -279,8 +282,8 @@ def run_generate():
     poem_ds = PoemDataset(Config.poem_path, 48)
     ix2word = poem_ds.ix2word
     word2ix = poem_ds.word2ix
-    model = MyPoetryModel(len(word2ix), embedding_dim=Config.embedding_dim, hidden_dim=Config.hidden_dim)
-    model.load_state_dict(torch.load(Config.model_save_path+'poem95.pth'))  # 模型加载
+    model = MyPoetryModel_tanh(len(word2ix), embedding_dim=Config.embedding_dim, hidden_dim=Config.hidden_dim)
+    model.load_state_dict(torch.load(Config.model_save_path+'poem100.pth'))  # 模型加载
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     results = generate(model, '雨', ix2word, word2ix, device)
     print(''.join(i for i in results))
@@ -288,20 +291,30 @@ def run_generate():
     print(''.join(i for i in results))
     results = generate(model, '人生得意须尽欢，', ix2word, word2ix, device)
     print(''.join(i for i in results))
-    results = generate(model, '万里悲秋常作客，', ix2word, word2ix, device)
+    results = generate(model, '万里悲秋常作客，我言', ix2word, word2ix, device)
     print(''.join(i for i in results))
-    results = generate(model, '风急天高猿啸哀，渚清沙白鸟飞回。', ix2word, word2ix, device)
+    results = generate(model, '风急天高猿啸哀，', ix2word, word2ix, device)
     print(''.join(i for i in results))
-    results = generate(model, '千山鸟飞绝，万径人踪灭。', ix2word, word2ix, device)
+    results = generate(model, '千山鸟飞绝，', ix2word, word2ix, device)
     print(''.join(i for i in results))
-    results = generate(model, '窗前明月光，疑是地上霜。举头望明月，低头思故乡。', ix2word, word2ix, device)
+    results = generate(model, '床前明月光，疑是地上霜。', ix2word, word2ix, device)
     print(''.join(i for i in results))
-    results = generate(model, '天生我才必有用', ix2word, word2ix, device)
+    results = generate(model, '天生我材必有用，', ix2word, word2ix, device)
     print(''.join(i for i in results))
+    results = generate(model, '戍鼓断人行，', ix2word, word2ix, device)
+    print(''.join(i for i in results))
+    results = generate(model, '早知留酒待，', ix2word, word2ix, device)
+    print(''.join(i for i in results))
+    """
+    引电随龙密又轻， '酒' '桮' '闲' '噀''得' '嘉' '名' '。'
+    '千' '山' '草' '木' '如' '云' '暗' '，' '陆' '地' '波' '澜' '接' '海' '平' '。' 
+    '洒' '竹' '几' '添' '春' '睡' '重' '，' '滴' '簷' '偏' '遣' '夜' '愁' '生' '。'
+    '阴' '妖' '冷' '孽' '成' '何' '怪' '，' '敢' '蔽' '高' '天' '日' '月' '明' '。'
+    """
 
 
 if __name__ == '__main__':
-    # view_data(Config.poem_path)
+    view_data(Config.poem_path)
     # run()
     run_generate()
     pass
