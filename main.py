@@ -9,6 +9,13 @@ def print_hi(name):
     print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
 
 
+import torch
+
+flag = torch.cuda.is_available()
+if flag:
+    print("CUDA可使用")
+else:
+    print("CUDA不可用")
 # 按装订区域中的绿色按钮以运行脚本。
 if __name__ == '__main__':
     print_hi('PyCharm')

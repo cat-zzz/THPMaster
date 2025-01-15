@@ -5,14 +5,13 @@
 @Author : gql
 @Date   : 2024/8/20 15:37
 """
-import logging
 import re
 import time
 
-import h5py
 import numpy as np
 
-from src.util.logger import get_logger, logger
+from src.ml.preproc.encode_pot_binning import chip_encoding_with_distance
+from src.util.logger import logger
 
 CARDS = ['2c', '3c', '4c', '5c', '6c', '7c', '8c', '9c', 'Tc', 'Jc', 'Qc', 'Kc', 'Ac',
          '2d', '3d', '4d', '5d', '6d', '7d', '8d', '9d', 'Td', 'Jd', 'Qd', 'Kd', 'Ad',
@@ -43,10 +42,11 @@ def read_pgn_files(file_paths: list[str]):
 
 
 def convert_one_game_to_numpy(game_txt: str):
+    # 转换为四元组（状态、动作、奖励、下一状态）
     pass
 
 
-def convert_one_cards_game(one_cards_game: str, pos: int):
+def convert_one_game_cards(one_cards_game: str, pos: int):
     """
     将pos位置的手牌和公共牌转为numpy形式
     :param one_cards_game: 一局比赛的手牌和公共牌（由于会有玩家弃牌，所以公共牌可能并不完全）
@@ -90,20 +90,112 @@ def convert_one_cards_game(one_cards_game: str, pos: int):
     return cards
 
 
-def convert_one_actions_game(one_actions_game: str):
+num_active_players = 2  # 只适用于双人德扑，此变量的值一直为2
+
+
+def convert_one_game_actions(one_actions_game: str):
     """
-    将动作序列转为numpy张量形式
-    :param one_actions_game: 动作序列
+    将动作序列转为numpy形式
+    :param one_actions_game: 动作序列，格式为[动作序列长度, 动作特征维度（动作编码(8维+5维)+位置信息(1维)+底池编码(8维)）]
     """
     '''
     示例
         动作序列：r200r459c/r776c/r1313c/r2369r8100f
-        单个动作表示
+        单个动作用21个元素表示，[位置信息(1维), 底池编码(8维), allin, fold, check/call, raise, 下注筹码编码(8维，仅对raise动作有效)]
     '''
-    one_actions_seq = np.zeros((2, 14), dtype=np.float32)
+    player_chip = np.array([100, 50, 0])  # 前两个元素分别表示大小盲注在当前阶段内的下注筹码量，最后一个元素表示当前阶段之前的底池大小，所有元素相加才是整个底池大小
+    one_actions_seq = np.zeros((24, 22), dtype=np.float32)
+    one_actions_game_splits = one_actions_game.split('/')
+    action_idx = 0  # one_actions_seq的索引，表示当前进行到第几个动作
+    for i, one_stage in enumerate(one_actions_game_splits):  # 遍历每个阶段
+        one_stage = re.findall(r'\d+|f|c', one_stage)
+        if i == 0:
+            player_idx = 1  # 当前行动的玩家索引
+            last_player_idx = 0  # 上一位行动的玩家索引，初始置为1表示大盲注，若是多人德扑需考虑有玩家弃牌的情况
+        else:
+            player_idx = 0
+            last_player_idx = 1
+        k = 0  # k用来表示是否为一个阶段内的第一个raise动作，将用于specific_to_abstract_chip()函数中的ratio_flag
+        for raw_action in one_stage:  # 遍历一个阶段内的所有动作
+            # 底池编码，需要先进行底池编码再进行动作编码，因为底池编码是对当前动作未执行的底池进行编码
+            pot_weight = chip_encoding_with_distance(np.sum(player_chip))
+            one_actions_seq[action_idx][1:9] = pot_weight
+            # 动作编码
+            if raw_action.isdigit():  # raise动作
+                raise_chip = int(raw_action)
+                if raise_chip >= 20000:  # 原数据集里的allin用r20000表示，对方此时只能call或fold
+                    one_actions_seq[action_idx][9] = 1
+                elif k == 0 and i != 0:  # 第一次下注，只存在非preflop阶段，preflop阶段没有第一次下注（因为已经下了大小盲注）
+                    ratio = raise_chip / player_chip[-1]  # 相对于底池的倍率，由于是阶段内第一次下注，所以player_chip其他值均为0
+                    chip_encoding = specific_to_abstract_chip(ratio, ratio_flag=k)
+                    one_actions_seq[action_idx][-8:] = chip_encoding
+                    one_actions_seq[action_idx][12] = 1
+                    k = 1
+                else:  # 一般情况的下注动作（不是本阶段内的第一次下注）
+                    ratio = raise_chip / np.sum(player_chip[last_player_idx])
+                    k = 1  # preflop阶段没有第一次下注，k需要先置1
+                    chip_encoding = specific_to_abstract_chip(ratio, ratio_flag=k)
+                    one_actions_seq[action_idx][-8:] = chip_encoding
+                    one_actions_seq[action_idx][12] = 1
+                player_chip[player_idx] = raise_chip
+            elif raw_action == 'f':  # fold
+                one_actions_seq[action_idx][10] = 1
+            elif raw_action == 'c':  # check或call
+                one_actions_seq[action_idx][11] = 1
+                player_chip[player_idx] = player_chip[last_player_idx]
+            else:
+                raise ValueError(f'未知的动作:{raw_action}')
+            # 位置编码
+            one_actions_seq[action_idx][0] = player_idx
+            # 更新变量信息
+            player_idx = (player_idx + 1) % num_active_players
+            last_player_idx = (last_player_idx + 1) % num_active_players
+            action_idx += 1
+        # 一个阶段结束，更新筹码信息
+        player_chip[-1] = np.sum(player_chip[0:-1])
+        player_chip[:-1] = 0
+    return one_actions_seq
 
 
-def specific_to_abstract_chip(specific_chip, last_chip, ratio_flag=1):
+# 使用此方法
+def specific_to_abstract_chip(current_ratio, ratio_flag=1, threshold=1e-3):
+    if ratio_flag:  # 相对于上一位下注玩家的倍率
+        ratio_seq = np.array([2, 2.5, 3, 3.75, 4.5, 5.75, 7.5, 9])
+        if current_ratio <= 3:
+            sigma = 0.15
+        elif current_ratio <= 4:
+            sigma = 0.25
+        elif current_ratio <= 5:
+            sigma = 0.4
+        elif current_ratio <= 7:
+            sigma = 0.53
+        else:
+            sigma = 0.7
+    else:  # 相对于底池的倍率
+        # ratio_seq = np.array([0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4])
+        ratio_seq = np.array([0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4])
+        if current_ratio <= 1.5:
+            sigma = 0.1
+        elif current_ratio <= 2.75:
+            sigma = 0.2
+        else:
+            sigma = 0.3
+    # 计算当前下注金额与各个基准倍数的差异，并使用高斯核进行加权
+    differences = current_ratio - ratio_seq  # 后续计算会对differences进行平方，所以此处无需计算绝对值
+    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
+    normalized_similarities = similarities / np.sum(similarities)
+    # 识别和处理小于阈值的元素，并将其权重重新分配
+    mask = normalized_similarities >= threshold
+    small_elements_sum = np.sum(normalized_similarities[~mask])
+    normalized_similarities[~mask] = 0
+    remaining_sum = np.sum(normalized_similarities)  # 将小于阈值的元素的总和平均分配给剩余的元素
+    if remaining_sum > 0:
+        normalized_similarities += normalized_similarities * (small_elements_sum / remaining_sum)
+    return normalized_similarities
+
+
+# 不推荐此方法
+def specific_to_abstract_chip_2(specific_chip, last_chip, ratio_flag=1):
     """
     将具体筹码抽象为相较于最近一次下注或底池筹码（通过ratio_flag区分）的倍率
     :return: 不符合德扑规则的下注筹码返回-1
@@ -132,105 +224,7 @@ def specific_to_abstract_chip(specific_chip, last_chip, ratio_flag=1):
     return closest_index
 
 
-def specific_to_abstract_chip_2(specific_chip, previous_chip, ratio_flag=1, sigma=0.9):
-    if ratio_flag:
-        ratio_seq = [2, 2.25, 2.5, 2.75, 3, 3.5, 4, 5, 6]  # bet_ratio_seq，阶段内非第一次下注
-    else:
-        ratio_seq = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]  # pot_ratio_seq，阶段内第一次下注
-    if previous_chip == 0:
-        # previous_chip为上一玩家下注筹码或底池筹码
-        logger.error('分母previous_chip不能为0', exc_info=True)
-        return None
-    base_bet = previous_chip
-    bet_amounts = np.array([base_bet * multiple for multiple in ratio_seq])
-    # 计算当前下注金额与各个基准倍数的差异
-    differences = np.abs(specific_chip - bet_amounts)
-    # 使用高斯核对距离进行加权（距离越小，权重越大）
-    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
-    # 归一化处理，使得权重之和为1
-    normalized_similarities = similarities / np.sum(similarities)
-    return normalized_similarities
-
-
-def specific_to_abstract_chip_3(current_ratio, ratio_flag=1):
-    if ratio_flag:
-        ratio_seq = [2, 2.5, 3, 3.75, 4.5, 5.75, 7.5, 9]  # bet_ratio_seq，阶段内非第一次下注
-        # 动态调整sigma值
-        if current_ratio <= 3:
-            sigma = 0.15
-        elif current_ratio <= 4:  # 这里去掉了重复判断3 < current_ratio
-            sigma = 0.25
-        elif current_ratio <= 5:
-            sigma = 0.4
-        elif current_ratio <= 7:
-            sigma = 0.53
-        else:
-            sigma = 0.7
-    else:
-        ratio_seq = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4]  # pot_ratio_seq，阶段内第一次下注
-        if current_ratio <= 1.5:
-            sigma = 0.1
-        elif current_ratio <= 2.75:
-            sigma = 0.2
-        else:
-            sigma = 0.3
-
-    # 计算当前下注金额与各个基准倍数的差异
-    differences = np.abs(current_ratio - np.array(ratio_seq))
-    # 使用高斯核对距离进行加权
-    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
-    # 归一化处理，使得权重之和为1
-    normalized_similarities = similarities / np.sum(similarities)
-
-    # 识别和处理小于threshold的元素
-    mask = normalized_similarities >= 0.001
-    small_elements_sum = np.sum(normalized_similarities[~mask])
-    normalized_similarities[~mask] = 0
-
-    # 将小元素的总和平均分配给剩余的元素
-    remaining_sum = np.sum(normalized_similarities)
-    if remaining_sum > 0:
-        normalized_similarities += normalized_similarities * (small_elements_sum / remaining_sum)
-
-    return normalized_similarities
-
-
-def specific_to_abstract_chip_4(current_ratio, ratio_flag=1, threshold=1e-3):
-    if ratio_flag:
-        ratio_seq = np.array([2, 2.5, 3, 3.75, 4.5, 5.75, 7.5, 9])
-        if current_ratio <= 3:
-            sigma = 0.15
-        elif current_ratio <= 4:
-            sigma = 0.25
-        elif current_ratio <= 5:
-            sigma = 0.4
-        elif current_ratio <= 7:
-            sigma = 0.53
-        else:
-            sigma = 0.7
-    else:
-        ratio_seq = np.array([0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4])
-        if current_ratio <= 1.5:
-            sigma = 0.1
-        elif current_ratio <= 2.75:
-            sigma = 0.2
-        else:
-            sigma = 0.3
-    # 计算当前下注金额与各个基准倍数的差异，并使用高斯核进行加权
-    differences = current_ratio - ratio_seq  # 后续计算会对differences进行平方，所以此处无需计算绝对值
-    similarities = np.exp(-differences ** 2 / (2 * sigma ** 2))
-    normalized_similarities = similarities / np.sum(similarities)
-    # 识别和处理小于阈值的元素，并将其权重重新分配
-    mask = normalized_similarities >= threshold
-    small_elements_sum = np.sum(normalized_similarities[~mask])
-    normalized_similarities[~mask] = 0
-    remaining_sum = np.sum(normalized_similarities)  # 将小于阈值的元素的总和平均分配给剩余的元素
-    if remaining_sum > 0:
-        normalized_similarities += normalized_similarities * (small_elements_sum / remaining_sum)
-    return normalized_similarities
-
-
-if __name__ == '__main__':
+def test_specific_to_abstract_chip():
     # logger = get_logger()
     # 测试specific_to_abstract_chip()函数
     # closest_index_1 = specific_to_abstract_chip(110, 100, 1)
@@ -245,13 +239,25 @@ if __name__ == '__main__':
     # print(result)
     # result = specific_to_abstract_chip_3(3.15, 1)
     # print(result)
+    start_time = time.time()
+    cr = 0.1
+    incr = 0.05
+    for i in range(100):
+        cr = round(cr, 2)
+        result = specific_to_abstract_chip(cr, 1)
+        result[result < 1e-3] = 0
+        print('current ratio:', cr, 'result:', result)
+        cr += incr
+    end_time = time.time()
+    runtime = end_time - start_time
+    print(f"程序运行时间为: {runtime} 秒")
 
     # start_time = time.time()
     # cr = 0.1
     # incr = 0.05
     # for i in range(1000000):
     #     cr = round(cr, 2)
-    #     result = specific_to_abstract_chip_3(cr, 0)
+    #     result = specific_to_abstract_chip_2(cr, 0)
     #     result[result < 1e-3] = 0
     #     # print('current ratio:', cr, 'result:', result)
     #     cr += incr
@@ -259,16 +265,14 @@ if __name__ == '__main__':
     # runtime = end_time - start_time
     # print(f"程序运行时间为: {runtime} 秒")
 
-    start_time = time.time()
-    cr = 0.1
-    incr = 0.05
-    for i in range(1000000):
-        cr = round(cr, 2)
-        result = specific_to_abstract_chip_4(cr, 0)
-        result[result < 1e-3] = 0
-        # print('current ratio:', cr, 'result:', result)
-        cr += incr
-    end_time = time.time()
-    runtime = end_time - start_time
-    print(f"程序运行时间为: {runtime} 秒")
+
+def test_convert_one_game():
+    actions = 'r200r459c/r776c/r1313c/r2369r8100f'
+    result = convert_one_game_actions(actions)
+    print(result)
+
+
+if __name__ == '__main__':
+    test_specific_to_abstract_chip()
+    # test_convert_one_game()
     pass

@@ -215,12 +215,30 @@ def train(epochs, train_loader, device, model, criterion, optimizer, scheduler, 
     print('训练完成')
 
 
+def print_model_info(model):
+    total_params = 0
+    print("模型结构及参数量：")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            param_count = param.numel()
+            total_params += param_count
+            print(f"层: {name}\t 形状: {param.shape}\t 参数量: {param_count}")
+
+    print(f"\n模型的总参数量: {total_params}")
+
+
+def func():
+    model = MyPoetryModel_tanh(len(word2ix), embedding_dim=Config.embedding_dim, hidden_dim=Config.hidden_dim)
+    print_model_info(model)
+
+
 def run():
     print('加载数据集')
     # 上述参数的配置网络训练显存消耗为2395M，超过显存的话，重新调整下网络配置
     model = MyPoetryModel_tanh(len(word2ix),
                                embedding_dim=Config.embedding_dim,
                                hidden_dim=Config.hidden_dim)
+    print_model_info(model)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     epochs = 100
     optimizer = optim.Adam(model.parameters(), lr=Config.lr)
@@ -236,5 +254,6 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    # run()
+    func()
     pass
