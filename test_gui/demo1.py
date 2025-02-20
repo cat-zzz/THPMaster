@@ -9,6 +9,7 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtGui import QPixmap
 
 
 class Ui_MainWindow(object):
@@ -20,7 +21,7 @@ class Ui_MainWindow(object):
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
         self.gridLayout.setObjectName("gridLayout")
         self.label_2 = QtWidgets.QLabel(self.centralwidget)
-        self.label_2.setStyleSheet("border-image: url(:/card/images/0-0.png);")
+        # self.label_2.setStyleSheet("border-image: url(:/card/images/0-0.png);")
         self.label_2.setObjectName("label_2")
         self.gridLayout.addWidget(self.label_2, 1, 3, 1, 1)
         self.label = QtWidgets.QLabel(self.centralwidget)
@@ -63,6 +64,10 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu.menuAction())
         self.menubar.addAction(self.menu_2.menuAction())
 
+        # 设置点击事件
+        self.pushButton_2.clicked.connect(self.show_image_1)
+        self.pushButton_3.clicked.connect(self.show_image_2)
+
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -80,4 +85,14 @@ class Ui_MainWindow(object):
         self.menu_2.setTitle(_translate("MainWindow", "编辑"))
         self.actionOpen.setText(_translate("MainWindow", "打开棋谱"))
         self.actionSave.setText(_translate("MainWindow", "保存棋谱"))
+
+    def show_image_1(self):
+        pixmap = QPixmap(':card/images/0-2.png')
+        self.label_2.setPixmap(pixmap)
+
+    def show_image_2(self):
+        pixmap = QPixmap(':card/images/0-3.png')
+        self.label_2.setPixmap(pixmap)
+
+
 import pokers_rc

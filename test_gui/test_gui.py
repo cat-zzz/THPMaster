@@ -1,6 +1,6 @@
 """
 @project: THPMaster
-@File   : main.py
+@File   : test_gui.py
 @Desc   :
 @Author : gql
 @Date   : 2025/1/15 14:49
@@ -12,7 +12,7 @@ import demo1
 
 
 def click_success():
-    print("啊哈哈哈我终于成功了！")
+    print("点击事件")
 
 
 if __name__ == '__main__':
