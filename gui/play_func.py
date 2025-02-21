@@ -47,19 +47,24 @@ oppo_player_idx = 1
 max_action_timer_num = 120
 
 
+class StrategyWorker(QObject):
+    finished = pyqtSignal(np.ndarray)
+
+    def __init__(self, game: NoLimitHoldemGame):
+        super().__init__()
+        self.oppo_strategy = Strategy(game, oppo_player_idx)
+
+    def run(self):
+        time.sleep(1)
+        oppo_action = self.oppo_strategy.strategy_2()
+        self.finished.emit(oppo_action)
+
+
 class NoLimitHoldemRunner(QObject):
     """
     管理窗口，同时处理游戏逻辑
     """
     oppo_action_signal = pyqtSignal()
-
-    class StrategyQThread(QThread):
-        def __init__(self):
-            super().__init__()
-
-        def run(self):
-            # todo 未实现
-            pass
 
     def __init__(self):
         super().__init__()
@@ -82,6 +87,10 @@ class NoLimitHoldemRunner(QObject):
         self.mainWindow.show()
         self.init_play_ui()  # 初始化UI
         self.event_bind()  # 绑定事件汇总
+
+        self.worker = StrategyWorker()
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
 
     def run(self):
         """
@@ -126,31 +135,14 @@ class NoLimitHoldemRunner(QObject):
             self.ui.public_cards_1.setPixmap(public_pixmap_list[0])
             self.ui.public_cards_2.setPixmap(public_pixmap_list[1])
             self.ui.public_cards_3.setPixmap(public_pixmap_list[2])
-            self.ui.public_cards_4.setPixmap(back_pixmap)
-            self.ui.public_cards_5.setPixmap(back_pixmap)
         elif self.game.cur_stage == constants.turn_stage:
             public_cards = self.game.get_public_cards()
-            public_pixmap_list = [QPixmap(f'./pokers/{public_cards[0][0]}-{public_cards[0][1]}.png'),
-                                  QPixmap(f'./pokers/{public_cards[1][0]}-{public_cards[1][1]}.png'),
-                                  QPixmap(f'./pokers/{public_cards[2][0]}-{public_cards[2][1]}.png'),
-                                  QPixmap(f'./pokers/{public_cards[3][0]}-{public_cards[3][1]}.png'), ]
-            self.ui.public_cards_1.setPixmap(public_pixmap_list[0])
-            self.ui.public_cards_2.setPixmap(public_pixmap_list[1])
-            self.ui.public_cards_3.setPixmap(public_pixmap_list[2])
-            self.ui.public_cards_4.setPixmap(public_pixmap_list[3])
-            self.ui.public_cards_5.setPixmap(back_pixmap)
+            public_pixmap_list = [QPixmap(f'./pokers/{public_cards[3][0]}-{public_cards[3][1]}.png'), ]
+            self.ui.public_cards_4.setPixmap(public_pixmap_list[0])
         elif self.game.cur_stage == constants.river_stage:
             public_cards = self.game.get_public_cards()
-            public_pixmap_list = [QPixmap(f'./pokers/{public_cards[0][0]}-{public_cards[0][1]}'),
-                                  QPixmap(f'./pokers/{public_cards[1][0]}-{public_cards[1][1]}'),
-                                  QPixmap(f'./pokers/{public_cards[2][0]}-{public_cards[2][1]}'),
-                                  QPixmap(f'./pokers/{public_cards[3][0]}-{public_cards[3][1]}'),
-                                  QPixmap(f'./pokers/{public_cards[4][0]}-{public_cards[4][1]}'), ]
-            self.ui.public_cards_1.setPixmap(public_pixmap_list[0])
-            self.ui.public_cards_2.setPixmap(public_pixmap_list[1])
-            self.ui.public_cards_3.setPixmap(public_pixmap_list[2])
-            self.ui.public_cards_4.setPixmap(public_pixmap_list[3])
-            self.ui.public_cards_5.setPixmap(public_pixmap_list[4])
+            public_pixmap_list = [QPixmap(f'./pokers/{public_cards[4][0]}-{public_cards[4][1]}'), ]
+            self.ui.public_cards_5.setPixmap(public_pixmap_list[0])
         else:
             pass
 
@@ -178,7 +170,7 @@ class NoLimitHoldemRunner(QObject):
         self.ui.fold_btn.clicked.connect(self.fold_btn_step)
         self.ui.allin_btn.clicked.connect(self.allin_btn_step)
         self.my_timer.timeout.connect(self.display_my_timer_label)
-        self.my_timer.start(1000)   # 每隔1000ms触发一次display_my_timer_label()函数
+        self.my_timer.start(1000)  # 每隔1000ms触发一次display_my_timer_label()函数
         self.oppo_timer.timeout.connect(self.display_oppo_timer_label)
         # self.oppo_timer.start(1000)
 
@@ -203,7 +195,6 @@ class NoLimitHoldemRunner(QObject):
         # print(f"is_legal={is_legal}, game_state_flag={game_state_flag}, down={down}\ninfo={info}\nstate={state}\n")
         # 此时执行的是raise动作，一定需要对手行动，所以可以发送对手行动信号
         self.oppo_action_signal.emit()
-
 
     def call_btn_step(self):
         """
@@ -242,16 +233,21 @@ class NoLimitHoldemRunner(QObject):
         print('轮到对手行动，暂时禁用操作栏')
         disable_buttons_in_layout(self.ui.gridLayout_11)
         oppo_action = self.oppo_strategy.strategy_2()
-        time.sleep(2)
+        # time.sleep(2)
         state, is_legal, game_state_flag, down, info = self.take_oppo_action(oppo_action)
         # 判断接下来该哪个玩家行动
         # 如果该对手行动，则继续调用策略函数，得到一个动作并执行，如此重复下去直到轮到自己行动
         # 如果该我方行动，则结束此函数、激活底部UI的操作栏
-        if game_state_flag == self.game.CheckStateFuncResult.enter_next_state:
+        # todo 需要考虑进入earnChips阶段的情况，此时所有玩家均不需要行动
+        if self.game.cur_stage == constants.earn_chip_stage:
+            # todo 实现earnChips阶段的处理逻辑，玩家行动（只有call）之后进入earnChips阶段也需要进行处理
+            pass
+        elif game_state_flag == self.game.CheckStateFuncResult.enter_next_state:
             self.enter_next_stage()
+
         if state['cur_player_idx'] == oppo_player_idx:  # 正常情况下，最多只能连续行动两次，此处不需要while
             print('仍然轮到对手行动')
-            time.sleep(1)
+            # time.sleep(1)
             oppo_action = self.oppo_strategy.strategy_2()
             state, is_legal, game_state_flag, down, info = self.take_oppo_action(oppo_action)
         # 以下是关于UI的设置：启用操作栏，设置对手的stage_chip，设置滑动条的取值范围
