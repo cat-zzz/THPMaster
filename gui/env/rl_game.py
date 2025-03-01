@@ -5,6 +5,7 @@
 @Author : gql
 @Date   : 2024/3/22 13:15
 """
+import sys
 from enum import Enum
 
 import numpy as np
@@ -53,6 +54,9 @@ class NoLimitHoldemGame:
         self.config = game_config
         if game_config['seed'] != 0:
             np.random.seed(game_config['seed'])
+            self.np_seed = game_config['seed']
+        else:
+            self.np_seed = None
         self.game_name = 'No Limit Holdem Game'
         self.num_players = 2
         self.players = [Player(_) for _ in range(self.num_players)]  # 所有玩家
@@ -77,6 +81,8 @@ class NoLimitHoldemGame:
         # game_state_flag和cur_stage的区别：cur_stage表示不同阶段，game_state_flag可以区分出下一次行动是否为每阶段的首次行动
         self.game_state_flag = constants.func_game_init
         self.same_bet_player_count = 1  # 做出一次raise或allin的玩家及紧接着连续call或check的玩家总数
+        self.preflop_call_flag = 0  # 用于判断在preflop阶段，小盲注call，大盲注check，小盲注再次call的情况
+        self.allin_flag = 0
         self.game_history = []
         # self.last_action = []
 
@@ -112,6 +118,8 @@ class NoLimitHoldemGame:
         # 下盲注
         self.pot_chip = self.cur_stage_chip = constants.SMALLBLIND_CHIP + constants.BIGBLIND_CHIP
         # 重置其他变量
+        self.preflop_call_flag = 0
+        self.allin_flag = 0
         self.cur_stage = constants.preflop_stage
         self.folded_player_count = 0
         self.valid_bet_chip = constants.BIGBLIND_CHIP
@@ -133,11 +141,11 @@ class NoLimitHoldemGame:
             is_legal = True
             self.take_action(action)
             self.game_state_flag = self.check_game_state()
-            if self.game_state_flag == self.CheckStateFuncResult.enter_next_state and self.cur_stage_chip > 0:
-                # 执行check动作，game_state_flag仍为enter_next_state
+            if self.game_state_flag == self.CheckStateFuncResult.enter_next_state:
+                # if self.game_state_flag == self.CheckStateFuncResult.enter_next_state:
                 # 隐藏的每个阶段最后一次call动作，包括river阶段最后的call，
                 # 所以在earn_chip阶段判断输赢时，info中既包括payoffs，又包括hide_action
-                info['hide_action'] = [self.cur_player_idx, action]
+                info['hide_action'] = [self.cur_player_idx, action]  # todo hide_action信息可能有误，self.cur_player_idx
                 self._enter_next_stage()
                 # 正常比牌进入到earn chip阶段
                 if self.cur_stage == constants.earn_chip_stage:
@@ -187,16 +195,26 @@ class NoLimitHoldemGame:
             # 特殊情况：preflop阶段，小盲注call，大盲注check，小盲注再call
             if self.cur_stage != constants.preflop_stage:
                 self.same_bet_player_count += 1
-            elif prev_p.cur_stage_chip > constants.BIGBLIND_CHIP:
+            elif prev_p.cur_stage_chip == constants.BIGBLIND_CHIP:
+                if self.preflop_call_flag == 0:  # 第一次进入上一层elif
+                    self.preflop_call_flag = 1
+                else:
+                    self.same_bet_player_count = self.num_players
+            else:
                 self.same_bet_player_count += 1
         elif action[0] == constants.ALLIN_ACTION:
             action1 = np.array([constants.ALLIN_ACTION, constants.total_chip], dtype=int)
             cur_p.take_action(action1)
             self.pot_chip += (action1[1] - cur_player_chip)
             self.cur_stage_chip += (action1[1] - cur_player_chip)
-            self.valid_bet_chip = action[1]
+            self.valid_bet_chip = action1[1]
             self.allin_player_count += 1
-            self.same_bet_player_count += 1
+            # todo 第一位玩家做出Allin，same_bet_player_count应为1，后续玩家的Allin，same_bet_player_count才加1
+            if self.allin_flag == 0:
+                self.allin_flag = 1
+                self.same_bet_player_count = 1
+            else:
+                self.same_bet_player_count += 1
         elif action[0] == constants.FOLD_ACTION:
             action1 = np.array([constants.FOLD_ACTION, 0], dtype=int)
             cur_p.take_action(action1)
@@ -303,6 +321,9 @@ class NoLimitHoldemGame:
             public_cards = np.zeros((0, 2), dtype=int)
         return public_cards
 
+    def get_all_public_cards(self):
+        return self.all_cards[-5:]
+
     def get_state(self):
         # 获取公共牌
         # if self.cur_stage == constants.flop_stage:
@@ -336,7 +357,7 @@ class NoLimitHoldemGame:
                 j += 1
         # 无论是两人德扑还是多人德扑，只要有2人及以上玩家Allin，且其余玩家都是fold（即active状态的玩家数为0），则翻出后续所有公共牌，直接比牌
         if i >= 2 and j == 0:
-            state_flag = self.CheckStateFuncResult.folded_enter_earn_chip_stage
+            state_flag = self.CheckStateFuncResult.allin_enter_earn_chip_stage
             return state_flag
         # 2 判断游戏是否进入下一阶段
         if self.folded_player_count == self.num_players - 1:
@@ -344,13 +365,17 @@ class NoLimitHoldemGame:
             state_flag = self.CheckStateFuncResult.folded_enter_earn_chip_stage
         elif self.same_bet_player_count == self.num_players - self.folded_player_count:
             # preflop阶段，其他玩家call，此时可从大盲注开始再进行一轮下注
-            if self.cur_stage == constants.preflop_stage and self.valid_bet_chip == constants.BIGBLIND_CHIP:
-                state_flag = self.CheckStateFuncResult.stay_cur_stage
-            else:
-                state_flag = self.CheckStateFuncResult.enter_next_state
-        elif self.cur_stage_chip == 0:
-            # 本阶段内没有下注，仍标识为enter_next_state(表示每阶段的首次行动)
+            # if self.cur_stage == constants.preflop_stage and self.valid_bet_chip == constants.BIGBLIND_CHIP:
+            #     state_flag = self.CheckStateFuncResult.stay_cur_stage
+            # else:
+            #     state_flag = self.CheckStateFuncResult.enter_next_state
             state_flag = self.CheckStateFuncResult.enter_next_state
+        # elif self.cur_stage_chip == 0:
+        #     # todo 有问题（已解决），当先check， 后call时， cur_stage_chip也为0
+        #     #  上一个elif是否能否决一些情况？
+        #     print('test666')
+        #     # 本阶段内没有下注，仍标识为enter_next_state(表示每阶段的首次行动)
+        #     state_flag = self.CheckStateFuncResult.enter_next_state
         else:
             # 以上情况都不是，说明游戏还在当前阶段内
             state_flag = self.CheckStateFuncResult.stay_cur_stage
@@ -416,7 +441,7 @@ class NoLimitHoldemGame:
             # 则max_poker_values的值为[[1, 2865830], [3, 2865830]]
             max_poker_values = poker_values[np.where(poker_values == np.max(poker_values[:, 1], axis=0))[0], :]
             # 计算赢家获得筹码，未考虑赢得的筹码可能为小数的情况
-            player_earn_chip = int(self.pot_chip / max_poker_values.shape[0])  # shape[0]表示行数
+            player_earn_chip = int(self.pot_chip / max_poker_values.shape[0])  # shape[0]表示行数(最大牌型的玩家平分底池)
             # 更新每位玩家的输赢筹码量
             j = 0
             for i, p in enumerate(self.players):
@@ -537,6 +562,8 @@ class Player:
         last_chip = self.cur_stage_chip
         self.cur_stage_chip = call_chip
         self.game_total_chip += (call_chip - last_chip)
+        if self.game_total_chip == constants.total_chip:
+            self.player_state = constants.player_allin
 
     def fold(self):
         self.player_state = constants.player_folded
@@ -551,8 +578,10 @@ class Player:
         self.game_total_chip += (raise_chip - last_chip)
 
     def allin(self):
-        # todo 下注量是否需要改变
-        self.player_state = constants.player_folded
+        # 下注量也已更新
+        self.player_state = constants.player_allin
+        self.cur_stage_chip = constants.total_chip - (self.game_total_chip - self.cur_stage_chip)
+        self.game_total_chip = constants.total_chip
 
     def game_over(self, earn_chip):
         """
@@ -596,6 +625,9 @@ def test1(game=NoLimitHoldemGame()):
     act = np.array([constants.CALL_ACTION, 100])
     test_act(game, act)
     print('flop')
+    print(game.get_public_cards())
+    print(game.get_public_cards()[0])
+    print(game.get_public_cards()[1])
     act = np.array([constants.RAISE_ACTION, chips[1]])
     test_act(game, act)
     act = np.array([constants.CALL_ACTION, 100])
@@ -615,6 +647,23 @@ def test1(game=NoLimitHoldemGame()):
 
 
 if __name__ == '__main__':
-    game1 = NoLimitHoldemGame()
-    for _ in range(300):
-        test1(game1)
+    game_config1 = {
+        'seed': 864022131,  # 随机数种子，为0表示不设置随机数种子
+        'show_all_hands': True,  # 默认一旦进行比牌，则向所有玩家都展示手牌
+        'one_game_reset': True,  # todo 筹码默认为一局一复位（未实现）
+        'store_all_game_history': False,  # game_history是否保存全部对局的历史序列，还是只保存一局的序列
+    }
+    game1 = NoLimitHoldemGame(game_config1)
+    game1.reset()
+    print(game1.all_cards)
+    game1.reset()
+    print(game1.all_cards)
+    # np.random.seed(864022131)
+
+    # for _ in range(20):
+    #     # seed = np.random.randint(np.iinfo(np.int32).max)
+    #     # print(np.random.randint(0, 52))
+    #     seed = np.random.randint(np.iinfo(np.int32).max)
+    #     print(card_util.deal_cards(9, seed=seed))
+    # for _ in range(10):
+    #     test1(game1)

@@ -93,11 +93,18 @@ class Strategy:
             pass
 
     def strategy_2(self):
-        if self.game.check_game_state() == self.game.CheckStateFuncResult.enter_next_state:
+        legal_actions = self.game.get_legal_actions()
+        if legal_actions[0] == 1:
             return np.array([constants.CHECK_ACTION, 0])
-        if self.game.check_game_state() == self.game.CheckStateFuncResult.stay_cur_stage:
+        elif legal_actions[1] == 1:
             return np.array([constants.CALL_ACTION, 0])
-        return np.array([constants.FOLD_ACTION, 0])
+        else:
+            return np.array([constants.RAISE_ACTION, 300])
+        # if self.game.check_game_state() == self.game.CheckStateFuncResult.enter_next_state:
+        #     return np.array([constants.CHECK_ACTION, 0])
+        # if self.game.check_game_state() == self.game.CheckStateFuncResult.stay_cur_stage:
+        #     return np.array([constants.CALL_ACTION, 0])
+        # return np.array([constants.FOLD_ACTION, 0])
 
     def strategy(self, episode, stage_first_action_flag):
         self.episode = episode

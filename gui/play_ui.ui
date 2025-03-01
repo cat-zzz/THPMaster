@@ -14,28 +14,8 @@
    <string>德州扑克对战平台</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout_2">
-    <item row="2" column="1">
-     <layout class="QGridLayout" name="gridLayout_3">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_6">
-        <property name="font">
-         <font>
-          <family>宋体</family>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>TextLabel占位占位</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item row="3" column="1">
-     <layout class="QGridLayout" name="gridLayout_4"/>
-    </item>
-    <item row="2" column="0" rowspan="2">
+   <layout class="QGridLayout" name="gridLayout_2" rowstretch="0,0,0" columnstretch="3,1">
+    <item row="1" column="0" rowspan="2">
      <layout class="QGridLayout" name="gridLayout">
       <item row="0" column="1">
        <layout class="QGridLayout" name="gridLayout_5">
@@ -66,7 +46,7 @@
              </font>
             </property>
             <property name="text">
-             <string>倒计时</string>
+             <string/>
             </property>
            </widget>
           </item>
@@ -176,7 +156,7 @@
          </widget>
         </item>
         <item row="0" column="8">
-         <widget class="QLabel" name="label_2">
+         <widget class="QLabel" name="pot_chip">
           <property name="font">
            <font>
             <family>Times New Roman</family>
@@ -621,7 +601,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Check/Call</string>
+             <string>Call</string>
             </property>
            </widget>
           </item>
@@ -705,6 +685,68 @@
       </item>
      </layout>
     </item>
+    <item row="1" column="1">
+     <layout class="QGridLayout" name="gridLayout_12" rowstretch="0,0">
+      <item row="1" column="0">
+       <widget class="QTreeView" name="game_history">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <attribute name="headerDefaultSectionSize">
+         <number>30</number>
+        </attribute>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QScrollArea" name="scrollArea">
+        <property name="font">
+         <font>
+          <family>微软雅黑</family>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <property name="widgetResizable">
+         <bool>true</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+        </property>
+        <widget class="QWidget" name="scrollAreaWidgetContents">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>226</width>
+           <height>312</height>
+          </rect>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+         </layout>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -732,6 +774,8 @@
  </tabstops>
  <resources>
   <include location="poker.qrc"/>
+  <include location="poker.qrc"/>
+  <include location="C:/Users/gql13/.designer/backup/poker.qrc"/>
  </resources>
  <connections/>
 </ui>

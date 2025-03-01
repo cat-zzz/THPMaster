@@ -148,14 +148,14 @@ class NoLimitHoldemRunner(QObject):
     def oppo_strategy_finished_1(self, result):
         """
         OppoStrategyWorker执行完毕后的槽函数
-        :param result: OppoStrategyWorker.run()的执行结果
+        :param result: OppoStrategyWorker中finished信号携带的参数
         :return:
         """
         print(f'调用oppo_strategy_finished_2(), 其oppo_strategy为{result}\n')
         # 做出行动
         state, is_legal, game_state_flag, down, info = self.take_oppo_action(result)
         self.set_oppo_stage_chips()
-        self.show_pot_chips()
+        self.set_pot_chips()
         # 进入earnChips阶段，结算本局，开始新的一局
         if self.game.cur_stage == constants.earn_chip_stage:
             print('进入earnChips阶段')
@@ -219,13 +219,8 @@ class NoLimitHoldemRunner(QObject):
         # 2.6 对方倒计时
         # 2.7 我方倒计时
         # 其中2.1, 2.2, 2.3, 2.4, 2.5是静态信息，可以直接从self.game中获取
-        # 最近一次行动从UI事件获取
-        self.show_my_hand_cards()
+        self.show_my_hand_cards()   # 显示我方手牌
         self.show_my_stage_chips()
-        self.show_my_last_action_label(action)
-        self.show_public_cards()
-        self.show_pot_chips()
-        self.set_oppo_stage_chips()
 
     def get_raise_action_by_ui(self):
         """
@@ -278,15 +273,7 @@ class NoLimitHoldemRunner(QObject):
     def show_my_stage_chips(self):
         self.ui.my_stage_chip.setText(str(self.game.players[catzzz_player_idx].cur_stage_chip))
 
-    def show_my_last_action_label(self, action):
-        action_str = action_numpy_to_str(action)
-        self.ui.my_last_action_label.setText(action_str)
 
-    def show_pot_chips(self):
-        self.ui.pot_chip.setText(str(self.game.pot_chip))
-
-    def set_oppo_stage_chips(self):
-        self.ui.oppo_stage_chip.setText(str(self.game.players[oppo_player_idx].cur_stage_chip))
 
     # 以下是之前的内容
     def set_action_bar_ui(self):
@@ -316,7 +303,7 @@ class NoLimitHoldemRunner(QObject):
         state, is_legal, game_state_flag, down, info = self.take_oppo_action(result)
         print('设置对手的stage_chip')
         self.set_oppo_stage_chips()
-        self.show_pot_chips()
+        self.set_pot_chips()
         print('启用操作栏')
         enable_buttons_in_layout(self.ui.gridLayout_11)
         self.set_action_bar_ui()
@@ -341,7 +328,7 @@ class NoLimitHoldemRunner(QObject):
         state, is_legal, game_state_flag, down, info = self.take_my_action(my_action)
         # 更新UI信息
         self.show_my_stage_chips()
-        self.show_pot_chips()
+        self.set_pot_chips()
         # 2 判断下一状态
         if self.game.cur_player_idx == oppo_player_idx:
             disable_buttons_in_layout(self.ui.gridLayout_11)  # 对手行动时，禁用我方操作栏UI
@@ -464,6 +451,12 @@ class NoLimitHoldemRunner(QObject):
             self.ui.stage_label.setText('river')
         self.ui.my_last_action_label.setText('')
         self.ui.oppo_last_action_label.setText('')
+
+    def set_oppo_stage_chips(self):
+        self.ui.oppo_stage_chip.setText(str(self.game.players[oppo_player_idx].cur_stage_chip))
+
+    def set_pot_chips(self):
+        self.ui.pot_chip.setText(str(self.game.pot_chip))
 
     def label_show_slider_chip(self):
         """

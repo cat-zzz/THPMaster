@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>946</width>
-    <height>696</height>
+    <width>950</width>
+    <height>705</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -712,7 +712,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>946</width>
+     <width>950</width>
      <height>22</height>
     </rect>
    </property>
@@ -732,6 +732,7 @@
  </tabstops>
  <resources>
   <include location="poker.qrc"/>
+  <include location="C:/Users/gql13/.designer/backup/poker.qrc"/>
  </resources>
  <connections/>
 </ui>

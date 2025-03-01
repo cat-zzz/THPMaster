@@ -29,6 +29,24 @@ def deal_cards(num=1, excludes=None, seed=None):
     return cards
 
 
+# 更高效的实现发牌(暂未使用)
+def deal_cards_1(num=1, excludes=None, seed=None):
+    # 处理排除数组（去重并过滤非0-50的元素）
+    if excludes is not None:
+        exclude_filtered = np.unique(excludes)  # 去重
+        exclude_filtered = exclude_filtered[(exclude_filtered >= 0) & (exclude_filtered <= 52)]  # 过滤有效范围
+    else:
+        exclude_filtered = np.array([], dtype=int)
+    # 生成候选池（0-52且不包含排除元素）
+    candidate_pool = np.setdiff1d(np.arange(53), exclude_filtered)
+    # 检查候选池是否足够
+    if len(candidate_pool) < num:
+        raise ValueError(f"候选池元素不足{num}个（当前{len(candidate_pool)}个），请减少排除元素数量")
+    # 生成随机数
+    # np.random.seed(seed)
+    return np.random.choice(candidate_pool, size=num, replace=False)
+
+
 def deal_one_card(excludes=None, seed=None):
     """
     随机发一张不在excludes里的牌
@@ -36,8 +54,8 @@ def deal_one_card(excludes=None, seed=None):
     :return: [花色, 点数] numpy数组类型
     """
     # 此函数优点：无需递归调用，只执行一次就能随机产生一张不在excludes里的牌
-    if seed is not None:
-        np.random.seed(seed)
+    # if seed is not None:
+    #     np.random.seed(seed)
     if excludes is None:
         num = np.random.randint(0, 52)
         card = np.array((num % 4, num // 4))
